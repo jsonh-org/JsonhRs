@@ -1,0 +1,11 @@
+[package]
+name = "jsonh_rs_tests"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+jsonh_rs = { version = "*", path = "../jsonh_rs" }
+
+[[test]]
+name = "tests"
+path = "src/tests.rs"
