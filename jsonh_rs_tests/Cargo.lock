@@ -3,6 +3,12 @@
 version = 4
 
 [[package]]
+name = "futures-core"
+version = "0.3.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05f29059c0c2090612e8d742178b0580d2dc940c837851ad723096f87af6663e"
+
+[[package]]
 name = "itoa"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13,6 +19,7 @@ name = "jsonh_rs"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+ "yield-return",
 ]
 
 [[package]]
@@ -104,6 +111,15 @@ name = "unicode-ident"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "537dd038a89878be9b64dd4bd1b260315c1bb94f4d784956b81e27a088d9a09e"
+
+[[package]]
+name = "yield-return"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb4a322d5e766056caa7a1688efc2702f497a4e44a2322905b9a5b799c7aec9c"
+dependencies = [
+ "futures-core",
+]
 
 [[package]]
 name = "zmij"
