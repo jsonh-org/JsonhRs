@@ -1,5 +1,6 @@
 /// The types of tokens that make up a JSON document.
 #[repr(u8)]
+#[derive(Clone, Copy)]
 pub enum JsonTokenType {
     /// Indicates that there is no value (not to be confused with `Null`).
     None = 0,
