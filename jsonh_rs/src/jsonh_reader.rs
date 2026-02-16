@@ -1,4 +1,5 @@
-use std::{collections::HashSet, iter::Peekable, str::Chars};
+use std::char;
+use std::{iter::Peekable, str::Chars};
 use serde_json::Number;
 use serde_json::Value;
 use yield_return::LocalIter;
@@ -674,10 +675,15 @@ impl<'a> JsonhReader<'a> {
     fn read_hex_sequence(&mut self, length: usize) -> Result<u32, &'static str> {
         todo!();
     }
-    fn read_escape_sequence(&mut self) -> Result<String, &'static str> {
+    fn read_escape_sequence(&mut self, high_surrogate: Option<u32>) -> Result<String, &'static str> {
         let Some(escape_char) = self.read() else {
             return Err("Expected escape sequence, got end of input");
         };
+
+        // Ensure high surrogates are completed
+        if high_surrogate.is_some() && !matches!(escape_char, 'u' | 'x' | 'U') {
+            return Err("Expected low surrogate after high surrogate");
+        }
 
         // Reverse solidus
         if escape_char == '\\' {
@@ -721,24 +727,15 @@ impl<'a> JsonhReader<'a> {
         }
         // Unicode hex sequence
         else if escape_char == 'u' {
-            return match self.read_hex_sequence(4) {
-                Ok(code_point) => Ok(code_point.to_string()),
-                Err(err) => Err(err),
-            };
+            return self.read_hex_escape_sequence(4, high_surrogate);
         }
         // Short unicode hex sequence
         else if escape_char == 'x' {
-            return match self.read_hex_sequence(2) {
-                Ok(code_point) => Ok(code_point.to_string()),
-                Err(err) => Err(err),
-            };
+            return self.read_hex_escape_sequence(2, high_surrogate);
         }
         // Long unicode hex sequence
         else if escape_char == 'U' {
-            return match self.read_hex_sequence(8) {
-                Ok(code_point) => Ok(code_point.to_string()),
-                Err(err) => Err(err),
-            };
+            return self.read_hex_escape_sequence(8, high_surrogate);
         }
         // Escaped newline
         else if Self::NEWLINE_CHARS.contains(&escape_char) {
@@ -753,46 +750,36 @@ impl<'a> JsonhReader<'a> {
             return Ok(escape_char.to_string());
         }
     }
-    fn read_hex_escape_sequence(&mut self, length: usize) -> Result<String, &'static str> {
-        // This method is used to combine escaped UTF-16 surrogate pairs (e.g. "\uD83D\uDC7D" -> "👽")
-
-        // Read hex digits & convert to uint
-        let mut code_point: u32 = match self.read_hex_sequence(length) {
+    fn read_hex_escape_sequence(&mut self, length: usize, high_surrogate: Option<u32>) -> Result<String, &'static str> {
+        let code_point: u32 = match self.read_hex_sequence(length) {
             Ok(code_point) => code_point,
             Err(err) => return Err(err),
         };
 
-        // High surrogate
-        if Self::is_utf16_high_surrogate(code_point) {
-            // Escape sequence
-            if self.read_one('\\') {
-                let next: Option<char> = self.read_any(&['u', 'x', 'U']);
-                // Low surrogate escape sequence
-                if next.is_some() {
-                    // Read hex sequence
-                    let low_code_point: Result<u32, &'static str> = match next.unwrap() {
-                        'u' => self.read_hex_sequence(4),
-                        'x' => self.read_hex_sequence(2),
-                        'U' => self.read_hex_sequence(8),
-                        _ => unreachable!(),
-                    };
-                    // Ensure hex sequence read successfully
-                    if low_code_point.is_err() {
-                        return Err(low_code_point.unwrap_err());
-                    }
-                    // Combine high and low surrogates
-                    code_point = Self::utf16_surrogates_to_code_point(code_point, low_code_point.unwrap());
-                }
-                // Other escape sequence
-                else {
-                    // TODO: seek
-                }
+        // Low surrogate
+        if high_surrogate.is_some() {
+            let combined: u32 = match Self::utf16_surrogates_to_code_point(high_surrogate.unwrap(), code_point) {
+                Ok(combined) => combined,
+                Err(err) => return Err(err),
+            };
+            return match char::from_u32(combined) {
+                Some(combined_char) => Ok(combined_char.to_string()),
+                None => Err("Invalid hex escape sequence"),
+            };
+        }
+        else {
+            // High surrogate followed by low surrogate
+            if Self::is_utf16_high_surrogate(code_point) && self.read_one('\\') {
+                return self.read_escape_sequence(Some(code_point));
+            }
+            // Standalone character
+            else {
+                return match char::from_u32(code_point) {
+                    Some(code_point_char) => Ok(code_point_char.to_string()),
+                    None => Err("Invalid hex escape sequence"),
+                };
             }
         }
-
-        // Rune
-        let rune: String = code_point.to_string();
-        return Ok(rune);
     }
     fn peek(&mut self) -> Option<char> {
         return self.source.peek().copied();
@@ -818,10 +805,19 @@ impl<'a> JsonhReader<'a> {
         self.read();
         return Some(next);
     }
-    fn utf16_surrogates_to_code_point(high_surrogate: u32, low_surrogate: u32) -> u32 {
-        return 0x10000 + (((high_surrogate - 0xD800) << 10) | (low_surrogate - 0xDC00));
+    const fn utf16_surrogates_to_code_point(high_surrogate: u32, low_surrogate: u32) -> Result<u32, &'static str> {
+        if !Self::is_utf16_high_surrogate(high_surrogate) {
+            return Err("High surrogate out of range");
+        }
+        if !Self::is_utf16_low_surrogate(low_surrogate) {
+            return Err("Low surrogate out of range");
+        }
+        return Ok(0x10000 + (((high_surrogate - 0xD800) << 10) | (low_surrogate - 0xDC00)));
     }
-    fn is_utf16_high_surrogate(code_point: u32) -> bool {
+    const fn is_utf16_high_surrogate(code_point: u32) -> bool {
         return code_point >= 0xD800 && code_point <= 0xDBFF;
+    }
+    const fn is_utf16_low_surrogate(code_point: u32) -> bool {
+        return code_point >= 0xDC00 && code_point <= 0xDFFF;
     }
 }
