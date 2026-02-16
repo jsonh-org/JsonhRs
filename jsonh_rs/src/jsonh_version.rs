@@ -1,6 +1,6 @@
 /// The major versions of the JSONH specification.
 #[repr(u32)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub enum JsonhVersion {
     /// Indicates that the latest version should be used (currently `V2`).
     Latest = 0,

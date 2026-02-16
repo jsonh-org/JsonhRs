@@ -6,6 +6,7 @@ use yield_return::LocalIter;
 use crate::JsonhToken;
 use crate::JsonTokenType;
 use crate::JsonhReaderOptions;
+use crate::JsonhVersion;
 
 pub struct JsonhReader<'a> {
     /// The peekable character iterator to read characters from.
@@ -19,6 +20,15 @@ pub struct JsonhReader<'a> {
 }
 
 impl<'a> JsonhReader<'a> {
+    /// Characters that cannot be used unescaped in quoteless strings.
+    fn reserved_chars(&self) -> &'static [char] { if self.options.supports_version(JsonhVersion::V2) { &Self::RESERVED_CHARS_V2 } else { &Self::RESERVED_CHARS_V1 } }
+    /// Characters that cannot be used unescaped in quoteless strings in JSONH V1.
+    const RESERVED_CHARS_V1: &'static [char] = &['\\', ',', ':', '[', ']', '{', '}', '/', '#', '"', '\''];
+    /// Characters that cannot be used unescaped in quoteless strings in JSONH V2.
+    const RESERVED_CHARS_V2: &'static [char] = &['\\', ',', ':', '[', ']', '{', '}', '/', '#', '"', '\'', '@'];
+    /// Characters that are considered newlines.
+    const NEWLINE_CHARS: &'static [char] = &['\n', '\r', '\u{2028}', '\u{2029}'];
+
     /// Constructs a reader that reads JSONH from a peekable character iterator.
     pub fn from_peekable_chars(source: Peekable<Chars<'a>>, options: JsonhReaderOptions) -> Self {
         return Self { source: source, options: options, char_counter: 0, depth: 0 };
@@ -664,8 +674,125 @@ impl<'a> JsonhReader<'a> {
     fn read_hex_sequence(&mut self, length: usize) -> Result<u32, &'static str> {
         todo!();
     }
-    fn read_escape_sequence(&mut self, string_builder: &mut String) -> Result<(), &'static str> {
-        todo!();
+    fn read_escape_sequence(&mut self) -> Result<String, &'static str> {
+        let Some(escape_char) = self.read() else {
+            return Err("Expected escape sequence, got end of input");
+        };
+
+        // Reverse solidus
+        if escape_char == '\\' {
+            return Ok("\\".to_string());
+        }
+        // Backspace
+        else if escape_char == 'b' {
+            return Ok("\x08".to_string()); // "\b"
+        }
+        // Form feed
+        else if escape_char == 'f' {
+            return Ok("\x0c".to_string()); // "\f"
+        }
+        // Newline
+        else if escape_char == 'n' {
+            return Ok("\n".to_string());
+        }
+        // Carriage return
+        else if escape_char == 'r' {
+            return Ok("\r".to_string());
+        }
+        // Tab
+        else if escape_char == 't' {
+            return Ok("\t".to_string());
+        }
+        // Vertical tab
+        else if escape_char == 'v' {
+            return Ok("\x0b".to_string()); // "\v"
+        }
+        // Null
+        else if escape_char == '0' {
+            return Ok("\0".to_string());
+        }
+        // Alert
+        else if escape_char == 'a' {
+            return Ok("\x07".to_string()); // "\a"
+        }
+        // Escape
+        else if escape_char == 'e' {
+            return Ok("\x1b".to_string()); // "\e"
+        }
+        // Unicode hex sequence
+        else if escape_char == 'u' {
+            return match self.read_hex_sequence(4) {
+                Ok(code_point) => Ok(code_point.to_string()),
+                Err(err) => Err(err),
+            };
+        }
+        // Short unicode hex sequence
+        else if escape_char == 'x' {
+            return match self.read_hex_sequence(2) {
+                Ok(code_point) => Ok(code_point.to_string()),
+                Err(err) => Err(err),
+            };
+        }
+        // Long unicode hex sequence
+        else if escape_char == 'U' {
+            return match self.read_hex_sequence(8) {
+                Ok(code_point) => Ok(code_point.to_string()),
+                Err(err) => Err(err),
+            };
+        }
+        // Escaped newline
+        else if Self::NEWLINE_CHARS.contains(&escape_char) {
+            // Join CR LF
+            if escape_char == '\r' {
+                self.read_one('\n');
+            }
+            return Ok(String::new());
+        }
+        // Other
+        else {
+            return Ok(escape_char.to_string());
+        }
+    }
+    fn read_hex_escape_sequence(&mut self, length: usize) -> Result<String, &'static str> {
+        // This method is used to combine escaped UTF-16 surrogate pairs (e.g. "\uD83D\uDC7D" -> "👽")
+
+        // Read hex digits & convert to uint
+        let mut code_point: u32 = match self.read_hex_sequence(length) {
+            Ok(code_point) => code_point,
+            Err(err) => return Err(err),
+        };
+
+        // High surrogate
+        if Self::is_utf16_high_surrogate(code_point) {
+            // Escape sequence
+            if self.read_one('\\') {
+                let next: Option<char> = self.read_any(&['u', 'x', 'U']);
+                // Low surrogate escape sequence
+                if next.is_some() {
+                    // Read hex sequence
+                    let low_code_point: Result<u32, &'static str> = match next.unwrap() {
+                        'u' => self.read_hex_sequence(4),
+                        'x' => self.read_hex_sequence(2),
+                        'U' => self.read_hex_sequence(8),
+                        _ => unreachable!(),
+                    };
+                    // Ensure hex sequence read successfully
+                    if low_code_point.is_err() {
+                        return Err(low_code_point.unwrap_err());
+                    }
+                    // Combine high and low surrogates
+                    code_point = Self::utf16_surrogates_to_code_point(code_point, low_code_point.unwrap());
+                }
+                // Other escape sequence
+                else {
+                    // TODO: seek
+                }
+            }
+        }
+
+        // Rune
+        let rune: String = code_point.to_string();
+        return Ok(rune);
     }
     fn peek(&mut self) -> Option<char> {
         return self.source.peek().copied();
@@ -680,7 +807,7 @@ impl<'a> JsonhReader<'a> {
         }
         return false;
     }
-    fn read_any(&mut self, options: &HashSet<char>) -> Option<char> {
+    fn read_any(&mut self, options: &[char]) -> Option<char> {
         // Peek char
         let next: char = self.peek()?;
         // Match option
@@ -690,5 +817,11 @@ impl<'a> JsonhReader<'a> {
         // Option matched
         self.read();
         return Some(next);
+    }
+    fn utf16_surrogates_to_code_point(high_surrogate: u32, low_surrogate: u32) -> u32 {
+        return 0x10000 + (((high_surrogate - 0xD800) << 10) | (low_surrogate - 0xDC00));
+    }
+    fn is_utf16_high_surrogate(code_point: u32) -> bool {
+        return code_point >= 0xD800 && code_point <= 0xDBFF;
     }
 }

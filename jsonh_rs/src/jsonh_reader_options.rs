@@ -46,6 +46,15 @@ impl JsonhReaderOptions {
     pub fn new() -> Self {
         return Self { version: JsonhVersion::Latest, parse_single_element: false, max_depth: 64, incomplete_inputs: false };
     }
+    /// Returns whether `version` is greater than or equal to `minimum_version`.
+    pub fn supports_version(&self, minimum_version: JsonhVersion) -> bool {
+        const LATEST_VERSION: JsonhVersion = JsonhVersion::V2;
+
+        let options_version: JsonhVersion = if self.version == JsonhVersion::Latest { LATEST_VERSION } else { self.version };
+        let given_version: JsonhVersion = if minimum_version == JsonhVersion::Latest { LATEST_VERSION } else { minimum_version };
+
+        return options_version >= given_version;
+    }
     /// Specifies the major version of the JSONH specification to use.
     pub fn with_version(mut self, value: JsonhVersion) -> Self {
         self.version = value;
