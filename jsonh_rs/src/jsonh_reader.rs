@@ -675,33 +675,25 @@ impl<'a> JsonhReader<'a> {
     fn read_hex_sequence<const LENGTH: usize>(&mut self) -> Result<u32, &'static str> {
         const { assert!(LENGTH <= 8); };
 
-        /*let mut hex_chars: [u8; LENGTH] = [0; LENGTH];
-
-        for index in 0..LENGTH {
-            let next: Option<char> = self.read();
-
-            // Hex digit
-            if matches!(next, Some('0'..='9' | 'A'..='F' | 'a'..='f')) {
-                hex_chars[index] = next.unwrap() as u8;
-            }
-            else {
-                return Err("Incorrect number of hexadecimal digits in unicode escape sequence");
-            }
-        }
-
-        // Parse unicode character from hex digits
-        let hex_chars_str: &str = unsafe { str::from_utf8_unchecked(&hex_chars) };
-        return Ok(u32::from_str_radix(hex_chars_str, 16).unwrap());*/
-
         let mut value: u32 = 0;
 
         for _index in 0..LENGTH {
             let next: Option<char> = self.read();
 
             // Hex digit
-            if let Some(digit) = next.and_then(|c| c.to_digit(16)) {
-                value = (value * 16) + digit;
+            if matches!(next, Some('0'..='9' | 'A'..='F' | 'a'..='f')) {
+                // Get hex digit
+                let digit: char = next.unwrap();
+                // Convert hex digit to integer
+                let integer: u32 = match digit {
+                    'A'..='F' => (digit as u32) - ('A' as u32) + 10,
+                    'a'..='f' => (digit as u32) - ('a' as u32) + 10,
+                    _ => (digit as u32) - ('0' as u32)
+                };
+                // Aggregate digit into value
+                value = (value * 16) + integer;
             }
+            // Unexpected char
             else {
                 return Err("Incorrect number of hexadecimal digits in unicode escape sequence");
             }
