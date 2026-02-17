@@ -672,8 +672,43 @@ impl<'a> JsonhReader<'a> {
             }
         }
     }
-    fn read_hex_sequence(&mut self, length: usize) -> Result<u32, &'static str> {
-        todo!();
+    fn read_hex_sequence<const LENGTH: usize>(&mut self) -> Result<u32, &'static str> {
+        const { assert!(LENGTH <= 8); };
+
+        /*let mut hex_chars: [u8; LENGTH] = [0; LENGTH];
+
+        for index in 0..LENGTH {
+            let next: Option<char> = self.read();
+
+            // Hex digit
+            if matches!(next, Some('0'..='9' | 'A'..='F' | 'a'..='f')) {
+                hex_chars[index] = next.unwrap() as u8;
+            }
+            else {
+                return Err("Incorrect number of hexadecimal digits in unicode escape sequence");
+            }
+        }
+
+        // Parse unicode character from hex digits
+        let hex_chars_str: &str = unsafe { str::from_utf8_unchecked(&hex_chars) };
+        return Ok(u32::from_str_radix(hex_chars_str, 16).unwrap());*/
+
+        let mut value: u32 = 0;
+
+        for _index in 0..LENGTH {
+            let next: Option<char> = self.read();
+
+            // Hex digit
+            if let Some(digit) = next.and_then(|c| c.to_digit(16)) {
+                value = (value * 16) + digit;
+            }
+            else {
+                return Err("Incorrect number of hexadecimal digits in unicode escape sequence");
+            }
+        }
+
+        // Return aggregated value
+        return Ok(value);
     }
     fn read_escape_sequence(&mut self, high_surrogate: Option<u32>) -> Result<String, &'static str> {
         let Some(escape_char) = self.read() else {
@@ -727,15 +762,15 @@ impl<'a> JsonhReader<'a> {
         }
         // Unicode hex sequence
         else if escape_char == 'u' {
-            return self.read_hex_escape_sequence(4, high_surrogate);
+            return self.read_hex_escape_sequence::<4>(high_surrogate);
         }
         // Short unicode hex sequence
         else if escape_char == 'x' {
-            return self.read_hex_escape_sequence(2, high_surrogate);
+            return self.read_hex_escape_sequence::<2>(high_surrogate);
         }
         // Long unicode hex sequence
         else if escape_char == 'U' {
-            return self.read_hex_escape_sequence(8, high_surrogate);
+            return self.read_hex_escape_sequence::<8>(high_surrogate);
         }
         // Escaped newline
         else if Self::NEWLINE_CHARS.contains(&escape_char) {
@@ -750,8 +785,8 @@ impl<'a> JsonhReader<'a> {
             return Ok(escape_char.to_string());
         }
     }
-    fn read_hex_escape_sequence(&mut self, length: usize, high_surrogate: Option<u32>) -> Result<String, &'static str> {
-        let code_point: u32 = match self.read_hex_sequence(length) {
+    fn read_hex_escape_sequence<const LENGTH: usize>(&mut self, high_surrogate: Option<u32>) -> Result<String, &'static str> {
+        let code_point: u32 = match self.read_hex_sequence::<LENGTH>() {
             Ok(code_point) => code_point,
             Err(err) => return Err(err),
         };
