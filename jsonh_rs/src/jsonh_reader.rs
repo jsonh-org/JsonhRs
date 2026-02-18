@@ -29,6 +29,12 @@ impl<'a> JsonhReader<'a> {
     const RESERVED_CHARS_V2: &'static [char] = &['\\', ',', ':', '[', ']', '{', '}', '/', '#', '"', '\'', '@'];
     /// Characters that are considered newlines.
     const NEWLINE_CHARS: &'static [char] = &['\n', '\r', '\u{2028}', '\u{2029}'];
+    /// Characters that are considered whitespace.
+    const WHITESPACE_CHARS: &'static [char] = &[
+        '\u{0020}', '\u{00A0}', '\u{1680}', '\u{2000}', '\u{2001}', '\u{2002}', '\u{2003}', '\u{2004}', '\u{2005}',
+        '\u{2006}', '\u{2007}', '\u{2008}', '\u{2009}', '\u{200A}', '\u{202F}', '\u{205F}', '\u{3000}', '\u{2028}',
+        '\u{2029}', '\u{0009}', '\u{000A}', '\u{000B}', '\u{000C}', '\u{000D}', '\u{0085}',
+    ];
 
     /// Constructs a reader that reads JSONH from a peekable character iterator.
     pub fn from_peekable_chars(source: Peekable<Chars<'a>>, options: JsonhReaderOptions) -> Self {
@@ -606,20 +612,197 @@ impl<'a> JsonhReader<'a> {
     }
     fn read_item(&mut self) -> LocalIter<'_, Result<JsonhToken, &'static str>> {
         return LocalIter::new(|mut y| async move {
-            todo!();
+            // Element
+            for token_result in self.read_element() {
+                if token_result.is_err() {
+                    y.ret(token_result).await;
+                    return;
+                }
+                y.ret(token_result).await;
+            }
+
+            // Comments & whitespace
+            for token_result in self.read_comments_and_whitespace() {
+                if token_result.is_err() {
+                    y.ret(token_result).await;
+                    return;
+                }
+                y.ret(token_result).await;
+            }
+
+            // Optional comma
+            self.read_one(',');
         });
     }
     fn read_string(&mut self) -> Result<JsonhToken, &'static str> {
         todo!();
     }
     fn read_quoteless_string(&mut self, initial_chars: &str, is_verbatim: bool) -> Result<JsonhToken, &'static str> {
-        todo!();
+        let mut is_named_literal_possible: bool = !is_verbatim;
+
+        // Read quoteless string
+        let mut string_builder: String = String::from(initial_chars);
+
+        loop {
+            // Peek char
+            let Some(next) = self.peek() else {
+                break;
+            };
+
+            // Escape sequence
+            if next == '\\' {
+                self.read();
+                if is_verbatim {
+                    string_builder.push(next);
+                }
+                else {
+                    if let Err(escape_sequence_error) = self.read_escape_sequence(None) {
+                        return Err(escape_sequence_error);
+                    }
+                }
+                is_named_literal_possible = false;
+            }
+            // End on reserved character
+            else if self.reserved_chars().contains(&next) {
+                break;
+            }
+            // End on newline
+            else if Self::NEWLINE_CHARS.contains(&next) {
+                break;
+            }
+            // Literal character
+            else {
+                self.read();
+                string_builder.push(next);
+            }
+        }
+
+        // Ensure not empty
+        if string_builder.is_empty() {
+            return Err("Empty quoteless string");
+        }
+
+        // Trim whitespace
+        string_builder = string_builder.trim_matches(Self::WHITESPACE_CHARS).to_string();
+
+        // Match named literal
+        if is_named_literal_possible {
+            if string_builder == "null" {
+                return Ok(JsonhToken::new(JsonTokenType::Null, "null".to_string()));
+            }
+            else if string_builder == "true" {
+                return Ok(JsonhToken::new(JsonTokenType::True, "true".to_string()));
+            }
+            else if string_builder == "false" {
+                return Ok(JsonhToken::new(JsonTokenType::False, "false".to_string()));
+            }
+        }
+
+        // End of quoteless string
+        return Ok(JsonhToken::new(JsonTokenType::String, string_builder.to_string()));
     }
-    fn detect_quoteless_string(&mut self, whitespace_chars: &mut String) -> bool {
-        todo!();
+    fn detect_quoteless_string(&mut self, whitespace_builder: &mut String) -> bool {
+        loop {
+            // Peek char
+            let Some(next) = self.peek() else {
+                break;
+            };
+
+            // Newline
+            if Self::NEWLINE_CHARS.contains(&next) {
+                // Quoteless strings cannot contain unescaped newlines
+                return false;
+            }
+
+            // End of whitespace
+            if !Self::WHITESPACE_CHARS.contains(&next) {
+                break;
+            }
+
+            // Whitespace
+            whitespace_builder.push(next);
+            self.read();
+        }
+
+        // Found quoteless string if found backslash or non-reserved char
+        if let Some(next_char) = self.peek() {
+            return next_char == '\\' || !self.reserved_chars().contains(&next_char);
+        }
+        return false;
     }
-    fn read_number(&mut self, number_builder: &mut String) -> Result<JsonhToken, &'static str> {
-        todo!();
+    fn read_number(&mut self, mut number_builder: &mut String) -> Result<JsonhToken, &'static str> {
+        // Read sign
+        if let Some(sign) = self.read_any(&['-', '+']) {
+            number_builder.push(sign);
+        }
+
+        // Read base
+        let mut base_digits: &'static str = "0123456789";
+        let mut has_base_specifier: bool = false;
+        let mut has_leading_zero: bool = false;
+        if self.read_one('0') {
+            number_builder.push('0');
+            has_leading_zero = true;
+
+            if let Some(hex_base_char) = self.read_any(&['x', 'X']) {
+                number_builder.push(hex_base_char);
+                base_digits = "0123456789abcdef";
+                has_base_specifier = true;
+                has_leading_zero = false;
+            }
+            if let Some(binary_base_char) = self.read_any(&['b', 'B']) {
+                number_builder.push(binary_base_char);
+                base_digits = "01";
+                has_base_specifier = true;
+                has_leading_zero = false;
+            }
+            if let Some(octal_base_char) = self.read_any(&['o', 'O']) {
+                number_builder.push(octal_base_char);
+                base_digits = "01234567";
+                has_base_specifier = true;
+                has_leading_zero = false;
+            }
+        }
+
+        // Read main number
+        if let Err(main_error) = self.read_number_no_exponent(&mut number_builder, base_digits, has_base_specifier, has_leading_zero) {
+            return Err(main_error);
+        }
+
+        // Possible hexadecimal exponent
+        if matches!(number_builder.chars().last().unwrap(), 'e' | 'E') {
+            // Read sign (mandatory)
+            if let Some(exponent_sign) = self.read_any(&['+', '-']) {
+                number_builder.push(exponent_sign);
+
+                // Missing digit between base specifier and exponent (e.g. `0xe+`)
+                if has_base_specifier && number_builder.len() == 4 {
+                    return Err("Missing digit between base specifier and exponent");
+                }
+
+                // Read exponent number
+                if let Err(exponent_error) = self.read_number_no_exponent(&mut number_builder, base_digits, false, false) {
+                    return Err(exponent_error);
+                }
+            }
+        }
+        // Exponent
+        else if let Some(exponent_char) = self.read_any(&['e', 'E']) {
+            number_builder.push(exponent_char);
+
+            // Read sign
+            if let Some(exponent_sign) = self.read_any(&['-', '+']) {
+                number_builder.push(exponent_sign);
+            }
+
+            // Read exponent number
+            if let Err(exponent_error) = self.read_number_no_exponent(&mut number_builder, base_digits, false, false) {
+                return Err(exponent_error);
+            }
+        }
+
+        // End of number
+        return Ok(JsonhToken::new(JsonTokenType::Number, number_builder.clone()));
     }
     fn read_number_no_exponent(&mut self, number_builder: &mut String, base_digits: &str, has_base_specifier: bool, has_leading_zero: bool) -> Result<(), &'static str> {
         // Leading underscore
