@@ -1,7 +1,5 @@
-use std::char;
-use std::{iter::Peekable, str::Chars};
-use serde_json::Number;
-use serde_json::Value;
+use std::{char, iter::Peekable, str::Chars};
+use serde_json::{Value, Number};
 use yield_return::LocalIter;
 
 use crate::JsonhToken;
@@ -641,7 +639,193 @@ impl<'a> JsonhReader<'a> {
         });
     }
     fn read_string(&mut self) -> Result<JsonhToken, &'static str> {
-        todo!();
+        // Verbatim
+        let mut is_verbatim: bool = false;
+        if self.options.supports_version(JsonhVersion::V2) && self.read_one('@') {
+            is_verbatim = true;
+
+            // Ensure string immediately follows verbatim symbol
+            let next: Option<char> = self.peek();
+            if next.is_none() || matches!(next.unwrap(), '#' | '/') || Self::WHITESPACE_CHARS.contains(&next.unwrap()) {
+                return Err("Expected string to immediately follow verbatim symbol");
+            }
+        }
+
+        // Start quote
+        let Some(start_quote) = self.read_any(&['"', '\'']) else {
+            return self.read_quoteless_string("", is_verbatim);
+        };
+
+        // Count multiple start quotes
+        let mut start_quote_counter: usize = 1;
+        while self.read_one(start_quote) {
+            start_quote_counter += 1;
+        }
+
+        // Empty string
+        if start_quote_counter == 2 {
+            return Ok(JsonhToken::new(JsonTokenType::String, String::new()));
+        }
+
+        // Count multiple end quotes
+        let mut end_quote_counter: usize = 0;
+
+        // Read string
+        let mut string_builder: String = String::new();
+
+        loop {
+            let Some(next) = self.read() else {
+                return Err("Expected end of string, got end of input");
+            };
+
+            // Partial end quote was actually part of string
+            if next != start_quote {
+                while end_quote_counter > 0 {
+                    string_builder.push(start_quote);
+                    end_quote_counter -= 1;
+                }
+            }
+
+            // End quote
+            if next == start_quote {
+                end_quote_counter += 1;
+                if end_quote_counter == start_quote_counter {
+                    break;
+                }
+            }
+            // Escape sequence
+            else if next == '\\' {
+                if is_verbatim {
+                    string_builder.push(next);
+                }
+                else {
+                    if let Err(escape_sequence_error) = self.read_escape_sequence(None) {
+                        return Err(escape_sequence_error);
+                    }
+                }
+            }
+            // Literal character
+            else {
+                string_builder.push(next);
+            }
+        }
+
+        // Condition: skip remaining steps unless started with multiple quotes
+        if start_quote_counter > 1 {
+            // Pass 1: count leading whitespace -> newline
+            let mut has_leading_whitespace_newline: bool = false;
+            let mut leading_whitespace_newline_counter: usize = 0;
+            let mut last_char: Option<char> = None;
+            for (index, next) in string_builder.char_indices() {
+                // Join CR LF
+                if last_char == Some('\r') && next == '\n' {
+                    continue;
+                }
+
+                // Newline
+                if Self::NEWLINE_CHARS.contains(&next) {
+                    has_leading_whitespace_newline = true;
+                    leading_whitespace_newline_counter = index + 1;
+                    break;
+                }
+                // Non-whitespace
+                else if !Self::WHITESPACE_CHARS.contains(&next) {
+                    break;
+                }
+
+                last_char = Some(next);
+            }
+
+            // Condition: skip remaining steps if pass 1 failed
+            if has_leading_whitespace_newline {
+                // Pass 2: count trailing newline -> whitespace
+                let mut has_trailing_newline_whitespace: bool = false;
+                let mut last_newline_index: usize = 0;
+                let mut trailing_whitespace_counter: usize = 0;
+                let mut last_char2: Option<char> = None;
+                for (index, next) in string_builder.char_indices() {
+                    // Join CR LF
+                    if last_char2 == Some('\r') && next == '\n' {
+                        continue;
+                    }
+
+                    // Newline
+                    if Self::NEWLINE_CHARS.contains(&next) {
+                        has_trailing_newline_whitespace = true;
+                        last_newline_index = index;
+                        trailing_whitespace_counter = 0;
+                    }
+                    // Whitespace
+                    else if Self::WHITESPACE_CHARS.contains(&next) {
+                        trailing_whitespace_counter += 1;
+                    }
+                    // Non-whitespace
+                    else {
+                        has_trailing_newline_whitespace = false;
+                        trailing_whitespace_counter = 0;
+                    }
+
+                    last_char2 = Some(next);
+                }
+
+                // Condition: skip remaining steps if pass 2 failed
+                if has_trailing_newline_whitespace {
+                    // Pass 3: strip trailing newline -> whitespace
+                    string_builder.drain(last_newline_index..string_builder.len());
+
+                    // Pass 4: strip leading whitespace -> newline
+                    string_builder.drain(..leading_whitespace_newline_counter);
+
+                    // Condition: skip remaining steps if no trailing whitespace
+                    if trailing_whitespace_counter > 0 {
+                        // Pass 5: strip line-leading whitespace
+                        let mut is_line_leading_whitespace: bool = true;
+                        let mut line_leading_whitespace_counter: usize = 0;
+                        let mut index: usize = 0;
+                        while index < string_builder.len() {
+                            let next: char = string_builder[index..].chars().next().unwrap();
+
+                            // Newline
+                            if Self::NEWLINE_CHARS.contains(&next) {
+                                is_line_leading_whitespace = true;
+                                line_leading_whitespace_counter = 0;
+                            }
+                            // Whitespace
+                            else if Self::WHITESPACE_CHARS.contains(&next) {
+                                if is_line_leading_whitespace {
+                                    // Increment line-leading whitespace
+                                    line_leading_whitespace_counter += 1;
+
+                                    // Maximum line-leading whitespace reached
+                                    if line_leading_whitespace_counter == trailing_whitespace_counter {
+                                        // Remove line-leading whitespace
+                                        string_builder.drain((index + next.len_utf8() - line_leading_whitespace_counter)..(index + next.len_utf8()));
+                                        index -= line_leading_whitespace_counter;
+                                        // Exit line-leading whitespace
+                                        is_line_leading_whitespace = false;
+                                    }
+                                }
+                            }
+                            // Non-whitespace
+                            else {
+                                if is_line_leading_whitespace {
+                                    // Remove partial line-leading whitespace
+                                    string_builder.drain((index - line_leading_whitespace_counter)..index);
+                                    index -= line_leading_whitespace_counter;
+                                    // Exit line-leading whitespace
+                                    is_line_leading_whitespace = false;
+                                }
+                            }
+
+                            index += next.len_utf8();
+                        }
+                    }
+                }
+            }
+        }
+
+        // End of string
+        return Ok(JsonhToken::new(JsonTokenType::String, string_builder.to_string()));
     }
     fn read_quoteless_string(&mut self, initial_chars: &str, is_verbatim: bool) -> Result<JsonhToken, &'static str> {
         let mut is_named_literal_possible: bool = !is_verbatim;
