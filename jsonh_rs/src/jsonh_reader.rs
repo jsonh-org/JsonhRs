@@ -772,7 +772,7 @@ impl<'a> JsonhReader<'a> {
         // Possible hexadecimal exponent
         if matches!(number_builder.chars().last().unwrap(), 'e' | 'E') {
             // Read sign (mandatory)
-            if let Some(exponent_sign) = self.read_any(&['+', '-']) {
+            if let Some(exponent_sign) = self.read_any(&['-', '+']) {
                 number_builder.push(exponent_sign);
 
                 // Missing digit between base specifier and exponent (e.g. `0xe+`)
