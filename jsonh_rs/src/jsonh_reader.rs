@@ -182,7 +182,13 @@ impl<'a> JsonhReader<'a> {
 
         // Ensure exactly one element
         if next_element.is_ok() {
-            // TODO
+            if self.options.parse_single_element {
+                for token_result in self.read_end_of_elements() {
+                    if let Err(token_error) = token_result {
+                        return Err(token_error);
+                    }
+                }
+            }
         }
 
         return next_element;
