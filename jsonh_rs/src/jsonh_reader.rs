@@ -712,18 +712,23 @@ impl<'a> JsonhReader<'a> {
 
         // Condition: skip remaining steps unless started with multiple quotes
         if start_quote_counter > 1 {
+            // Get chars from string builder
+            let mut string_builder_chars: Vec<char> = string_builder.chars().collect();
+
             // Pass 1: count leading whitespace -> newline
             let mut has_leading_whitespace_newline: bool = false;
             let mut leading_whitespace_newline_counter: usize = 0;
-            let mut last_char: Option<char> = None;
-            for (index, next) in string_builder.char_indices() {
-                // Join CR LF
-                if last_char == Some('\r') && next == '\n' {
-                    continue;
-                }
+            let mut index: usize = 0;
+            while index < string_builder_chars.len() {
+                let next: char = string_builder_chars[index];
 
                 // Newline
                 if Self::NEWLINE_CHARS.contains(&next) {
+                    // Join CR LF
+                    if next == '\r' && index + 1 < string_builder_chars.len() && string_builder_chars[index + 1] == '\n' {
+                        index += 1;
+                    }
+
                     has_leading_whitespace_newline = true;
                     leading_whitespace_newline_counter = index + 1;
                     break;
@@ -733,7 +738,7 @@ impl<'a> JsonhReader<'a> {
                     break;
                 }
 
-                last_char = Some(next);
+                index += 1;
             }
 
             // Condition: skip remaining steps if pass 1 failed
@@ -742,18 +747,20 @@ impl<'a> JsonhReader<'a> {
                 let mut has_trailing_newline_whitespace: bool = false;
                 let mut last_newline_index: usize = 0;
                 let mut trailing_whitespace_counter: usize = 0;
-                let mut last_char2: Option<char> = None;
-                for (index, next) in string_builder.char_indices() {
-                    // Join CR LF
-                    if last_char2 == Some('\r') && next == '\n' {
-                        continue;
-                    }
+                let mut index2: usize = 0;
+                while index2 < string_builder_chars.len() {
+                    let next: char = string_builder_chars[index2];
 
                     // Newline
                     if Self::NEWLINE_CHARS.contains(&next) {
                         has_trailing_newline_whitespace = true;
-                        last_newline_index = index;
+                        last_newline_index = index2;
                         trailing_whitespace_counter = 0;
+
+                        // Join CR LF
+                        if next == '\r' && index2 + 1 < string_builder_chars.len() && string_builder_chars[index2 + 1] == '\n' {
+                            index2 += 1;
+                        }
                     }
                     // Whitespace
                     else if Self::WHITESPACE_CHARS.contains(&next) {
@@ -765,25 +772,25 @@ impl<'a> JsonhReader<'a> {
                         trailing_whitespace_counter = 0;
                     }
 
-                    last_char2 = Some(next);
+                    index2 += 1;
                 }
 
                 // Condition: skip remaining steps if pass 2 failed
                 if has_trailing_newline_whitespace {
                     // Pass 3: strip trailing newline -> whitespace
-                    string_builder.drain(last_newline_index..string_builder.len());
+                    string_builder_chars.drain(last_newline_index..string_builder_chars.len());
 
                     // Pass 4: strip leading whitespace -> newline
-                    string_builder.drain(..leading_whitespace_newline_counter);
+                    string_builder_chars.drain(..leading_whitespace_newline_counter);
 
                     // Condition: skip remaining steps if no trailing whitespace
                     if trailing_whitespace_counter > 0 {
                         // Pass 5: strip line-leading whitespace
                         let mut is_line_leading_whitespace: bool = true;
                         let mut line_leading_whitespace_counter: usize = 0;
-                        let mut index: usize = 0;
-                        while index < string_builder.len() {
-                            let next: char = string_builder[index..].chars().next().unwrap();
+                        let mut index3: usize = 0;
+                        while index3 < string_builder_chars.len() {
+                            let next: char = string_builder_chars[index3];
 
                             // Newline
                             if Self::NEWLINE_CHARS.contains(&next) {
@@ -799,8 +806,8 @@ impl<'a> JsonhReader<'a> {
                                     // Maximum line-leading whitespace reached
                                     if line_leading_whitespace_counter == trailing_whitespace_counter {
                                         // Remove line-leading whitespace
-                                        string_builder.drain((index + next.len_utf8() - line_leading_whitespace_counter)..(index + next.len_utf8()));
-                                        index -= line_leading_whitespace_counter;
+                                        string_builder_chars.drain((index3 + 1 - line_leading_whitespace_counter)..(index3 + 1));
+                                        index3 -= line_leading_whitespace_counter;
                                         // Exit line-leading whitespace
                                         is_line_leading_whitespace = false;
                                     }
@@ -810,18 +817,21 @@ impl<'a> JsonhReader<'a> {
                             else {
                                 if is_line_leading_whitespace {
                                     // Remove partial line-leading whitespace
-                                    string_builder.drain((index - line_leading_whitespace_counter)..index);
-                                    index -= line_leading_whitespace_counter;
+                                    string_builder_chars.drain((index3 - line_leading_whitespace_counter)..index3);
+                                    index3 -= line_leading_whitespace_counter;
                                     // Exit line-leading whitespace
                                     is_line_leading_whitespace = false;
                                 }
                             }
 
-                            index += next.len_utf8();
+                            index3 += 1;
                         }
                     }
                 }
             }
+
+            // Get string builder from chars
+            string_builder = string_builder_chars.iter().collect();
         }
 
         // End of string
