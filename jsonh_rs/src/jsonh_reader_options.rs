@@ -28,7 +28,7 @@ pub struct JsonhReaderOptions {
     /// ```
     /// 
     /// The default value is 64 to defend against DOS attacks.
-    pub max_depth: u32,
+    pub max_depth: i32,
     /// Enables/disables parsing unclosed inputs.
     /// 
     /// ```
@@ -86,7 +86,7 @@ impl JsonhReaderOptions {
     /// ```
     /// 
     /// The default value is 64 to defend against DOS attacks.
-    pub fn with_max_depth(mut self, value: u32) -> Self {
+    pub fn with_max_depth(mut self, value: i32) -> Self {
         self.max_depth = value;
         return self;
     }

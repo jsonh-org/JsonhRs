@@ -17,7 +17,7 @@ pub struct JsonhReader<'a> {
     /// The number of characters read from `source`.
     pub char_counter: u64,
     /// The current recursion depth of the reader.
-    pub depth: u32,
+    pub depth: i32,
 }
 
 impl<'a> JsonhReader<'a> {
@@ -195,7 +195,7 @@ impl<'a> JsonhReader<'a> {
     /// }
     /// ```
     pub fn find_property_value(&mut self, property_name: &str) -> bool {
-        let mut current_depth: u32 = 0;
+        let mut current_depth: i32 = 0;
 
         for token_result in self.read_element() {
             // Check error
@@ -618,17 +618,125 @@ impl<'a> JsonhReader<'a> {
     fn detect_quoteless_string(&mut self, whitespace_chars: &mut String) -> bool {
         todo!();
     }
-    fn read_number(&mut self) -> (JsonhToken, String) {
+    fn read_number(&mut self, number_builder: &mut String) -> Result<JsonhToken, &'static str> {
         todo!();
     }
-    fn read_number_no_exponent(&mut self, base_digits: &str, has_base_specifier: bool, has_leading_zero: bool) -> Result<(), &'static str> {
-        todo!();
+    fn read_number_no_exponent(&mut self, number_builder: &mut String, base_digits: &str, has_base_specifier: bool, has_leading_zero: bool) -> Result<(), &'static str> {
+        // Leading underscore
+        if !has_base_specifier && !has_leading_zero && self.peek() == Some('_') {
+            return Err("Leading `_` in number");
+        }
+
+        let mut is_fraction: bool = false;
+        let mut is_empty: bool = true;
+
+        // Leading zero (not base specifier)
+        if has_leading_zero {
+            is_empty = false;
+        }
+
+        loop {
+            // Peek char
+            let Some(next) = self.peek() else {
+                break;
+            };
+
+            // Digit
+            if base_digits.contains(next.to_ascii_lowercase()) {
+                self.read();
+                number_builder.push(next);
+                is_empty = false;
+            }
+            // Dot
+            else if next == '.' {
+                // Disallow dot following underscore
+                if number_builder.ends_with('_') {
+                    return Err("`.` must not follow `_` in number");
+                }
+
+                self.read();
+                number_builder.push(next);
+                is_empty = false;
+
+                // Duplicate dot
+                if is_fraction {
+                    return Err("Duplicate `.` in number");
+                }
+                is_fraction = true;
+            }
+            // Underscore
+            else if next == '_' {
+                // Disallow underscore following dot
+                if number_builder.ends_with('.') {
+                    return Err("`_` must not follow `.` in number");
+                }
+
+                self.read();
+                number_builder.push(next);
+                is_empty = false;
+            }
+            // Other
+            else {
+                break;
+            }
+        }
+
+        // Ensure not empty
+        if is_empty {
+            return Err("Empty number");
+        }
+
+        // Ensure at least one digit
+        if !number_builder.chars().any(|c| !matches!(c, '.' | '-' | '+' | '_')) {
+            return Err("Number must have at least one digit");
+        }
+
+        // Trailing underscore
+        if number_builder.ends_with('_') {
+            return Err("Trailing `_` in number");
+        }
+
+        // End of number
+        return Ok(());
     }
     fn read_number_or_quoteless_string(&mut self) -> Result<JsonhToken, &'static str> {
-        todo!();
+        // Read number
+        let mut number_builder: String = String::new();
+        let number: Result<JsonhToken, &'static str> = self.read_number(&mut number_builder);
+        if number.is_ok() {
+            // Try read quoteless string starting with number
+            let mut whitespace_chars: String = String::new();
+            if self.detect_quoteless_string(&mut whitespace_chars) {
+                return self.read_quoteless_string((number.unwrap().value + whitespace_chars.as_str()).as_str(), false);
+            }
+            // Otherwise, accept number
+            else {
+                return number;
+            }
+        }
+        // Read quoteless string starting with malformed number
+        else {
+            return self.read_quoteless_string(number_builder.as_str(), false);
+        }
     }
     fn read_primitive_element(&mut self) -> Result<JsonhToken, &'static str> {
-        todo!();
+        // Peek char
+        let Some(next) = self.peek() else {
+            return Err("Expected primitive element, got end of input");
+        };
+
+        // Number
+        if matches!(next, '0'..='9' | '-' | '+' | '.') {
+            return self.read_number_or_quoteless_string();
+        }
+        // String
+        else if matches!(next, '"' | '\'') || (self.options.supports_version(JsonhVersion::V2) && next == '@') {
+            return self.read_string();
+        }
+        // Quoteless string (or named literal)
+        else {
+            return self.read_quoteless_string("", false);
+        }
     }
     fn read_comments_and_whitespace(&mut self) -> LocalIter<'_, Result<JsonhToken, &'static str>> {
         return LocalIter::new(|mut y| async move {
@@ -653,7 +761,87 @@ impl<'a> JsonhReader<'a> {
         });
     }
     fn read_comment(&mut self) -> Result<JsonhToken, &'static str> {
-        todo!();
+        let mut block_comment: bool = false;
+        let mut start_nest_counter: i32 = 0;
+
+        // Hash-style comment
+        if self.read_one('#') {
+        }
+        else if self.read_one('/') {
+            // Line-style comment
+            if self.read_one('/') {
+            }
+            // Block-style comment
+            else if self.read_one('*') {
+                block_comment = true;
+            }
+            // Nestable block-style comment
+            else if self.options.supports_version(JsonhVersion::V2) && self.peek() == Some('=') {
+                block_comment = true;
+                while self.read_one('=') {
+                    start_nest_counter += 1;
+                }
+                if !self.read_one('*') {
+                    return Err("Expected `*` after start of nesting block comment");
+                }
+            }
+            else {
+                return Err("Unexpected `/`");
+            }
+        }
+        else {
+            return Err("Unexpected character");
+        }
+
+        // Read comment
+        let mut comment_builder: String = String::new();
+
+        loop {
+            // Read char
+            let next: Option<char> = self.read();
+
+            if block_comment {
+                // Error
+                if next.is_none() {
+                    return Err("Expected end of block comment, got end of input");
+                }
+
+                // End of block comment
+                if next == Some('*') {
+                    // End of nestable block comment
+                    if self.options.supports_version(JsonhVersion::V2) {
+                        // Count nests
+                        let mut end_nest_counter: i32 = 0;
+                        while end_nest_counter < start_nest_counter && self.read_one('=') {
+                            end_nest_counter += 1;
+                        }
+                        // Partial end nestable block comment was actually part of comment
+                        if end_nest_counter < start_nest_counter || self.peek() != Some('/') {
+                            comment_builder.push('*');
+                            while end_nest_counter > 0 {
+                                comment_builder.push('=');
+                                end_nest_counter -= 1;
+                            }
+                            continue;
+                        }
+                    }
+
+                    // End of block comment
+                    if self.read_one('/') {
+                        return Ok(JsonhToken::new(JsonTokenType::Comment, comment_builder));
+                    }
+                }
+            }
+            else {
+                // End of line comment
+                if next.is_none() || Self::NEWLINE_CHARS.contains(&next.unwrap()) {
+                    return Ok(JsonhToken::new(JsonTokenType::Comment, comment_builder));
+                }
+            }
+
+            // Comment char
+            comment_builder.push(next.unwrap());
+        }
     }
     fn read_whitespace(&mut self) -> () {
         loop {
