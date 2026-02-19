@@ -146,13 +146,15 @@ pub fn big_numbers_test() {
     // serde_json::Value does not support 1e99999 (infinity)
 
     let jsonh: &str = r#"
-        [3.5, Infinity]
+        [
+            3.5,
+            1e99999,
+            999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999
+        ]
         "#;
-    let element: Value = JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap();
 
-    assert_eq!(element.as_array().unwrap().len(), 2);
-    assert_eq!(element.as_array().unwrap()[0].as_f64().unwrap(), 3.5);
-    assert_eq!(element.as_array().unwrap()[1].as_str().unwrap(), "Infinity");
+    // Rust's serde_json::Value does not support infinity
+    assert_eq!(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).is_err(), true);
 }
 
 #[test]
