@@ -2,6 +2,7 @@ use crate::JsonhVersion;
 
 /// Options for a `JsonhReader`.
 #[derive(Clone, Copy)]
+#[non_exhaustive]
 pub struct JsonhReaderOptions {
     /// Specifies the major version of the JSONH specification to use.
     pub version: JsonhVersion,
