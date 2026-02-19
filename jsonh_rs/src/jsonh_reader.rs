@@ -131,7 +131,7 @@ impl<'a> JsonhReader<'a> {
                     },
                     // Number
                     JsonTokenType::Number => {
-                        let result: Result<f64, &str> = JsonhNumberParser::parse(&token.value);
+                        let result: Result<f64, &str> = JsonhNumberParser::parse(token.value);
                         if result.is_err() {
                             return Err(result.unwrap_err());
                         }
