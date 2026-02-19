@@ -6,6 +6,7 @@ use crate::JsonhToken;
 use crate::JsonTokenType;
 use crate::JsonhReaderOptions;
 use crate::JsonhVersion;
+use crate::JsonhNumberParser;
 
 pub struct JsonhReader<'a> {
     /// The peekable character iterator to read characters from.
@@ -130,11 +131,14 @@ impl<'a> JsonhReader<'a> {
                     },
                     // Number
                     JsonTokenType::Number => {
-                        let result = token.value.parse::<u32>(); // TODO
+                        let result: Result<f64, &str> = JsonhNumberParser::parse(&token.value);
                         if result.is_err() {
-                            return Err("Failed to parse integer");
+                            return Err(result.unwrap_err());
                         }
-                        let element: Value = Value::Number(Number::from(result.unwrap()));
+                        let Some(number) = Number::from_f64(result.unwrap()) else {
+                            return Err("Failed to convert number to JSON number");
+                        };
+                        let element: Value = Value::Number(number);
                         if submit_element(current_elements, current_property_name, element.clone()) {
                             return Ok(element);
                         }
