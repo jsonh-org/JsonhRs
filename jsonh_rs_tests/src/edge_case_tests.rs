@@ -364,3 +364,15 @@ pub fn massive_numbers_test() {
         ]
     );
 }
+
+#[test]
+pub fn fractional_hexadecimal_numbers_test() {
+    let jsonh: &str = r#"
+[0xA.A, 0xA.A1]
+"#;
+
+    assert_eq!(
+        serde_json::from_value::<Vec<f64>>(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap()).unwrap(),
+        [10.625, 10.62890625]
+    );
+}

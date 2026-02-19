@@ -130,29 +130,24 @@ impl JsonhNumberParser {
             Ok(whole) => whole,
             Err(whole_error) => return Err(whole_error),
         };
-        let fraction: f64 = match Self::parse_whole_number(fraction_part, base_digits) {
-            Ok(fraction) => fraction,
-            Err(fraction_error) => return Err(fraction_error),
-        };
 
-        // Get fraction leading zeroes
-        let mut fraction_leading_zeroes: String = String::new();
-        for fraction_part_char in fraction_part.chars() {
-            if fraction_part_char == '0' {
-                fraction_leading_zeroes.push('0');
+        // Add each column of fraction digits
+        let mut fraction: f64 = 0 as f64;
+        for digit_char in fraction_part.chars().rev() {
+            // Get current digit
+            let digit_int: Option<usize> = base_digits.find(digit_char.to_ascii_lowercase());
+
+            // Ensure digit is valid
+            if digit_int.is_none() {
+                return Err("Invalid digit");
             }
-            else {
-                break;
-            }
+
+            // Add value of column
+            fraction = (fraction + (digit_int.unwrap() as f64)) / (base_digits.len() as f64);
         }
 
         // Combine whole and fraction
-        let whole_digits: String = whole.to_string();
-        let fraction_digits: String = fraction.to_string();
-        return match ([whole_digits, ".".to_string(), fraction_leading_zeroes, fraction_digits].concat()).parse() {
-            Ok(number) => Ok(number),
-            Err(_) => Err("Error parsing number from string"),
-        };
+        return Ok(whole + fraction);
     }
     /// Converts a whole number (e.g. `12345`) from the given base (e.g. `01234567`) to a base-10 integer.
     fn parse_whole_number(mut digits: &str, base_digits: &str) -> Result<f64, &'static str> {
