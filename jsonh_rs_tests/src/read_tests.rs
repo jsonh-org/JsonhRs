@@ -3,10 +3,10 @@ use jsonh_rs::*;
 #[test]
 pub fn basic_object_test() {
     let jsonh = r#"
-        {
-            "a": "b"
-        }
-        "#;
+{
+    "a": "b"
+}
+"#;
     let mut reader: JsonhReader<'_> = JsonhReader::from_str(jsonh, JsonhReaderOptions::new());
     let tokens: Vec<Result<JsonhToken, &str>> = reader.read_element().collect();
 
@@ -24,12 +24,12 @@ pub fn basic_object_test() {
 #[test]
 pub fn nestable_block_comment_test() {
     let jsonh = r#"
-        /* */
-        /=* *=/
-        /==*/=**=/*==/
-        /=*/==**==/*=/
-        0
-        "#;
+/* */
+/=* *=/
+/==*/=**=/*==/
+/=*/==**==/*=/
+0
+"#;
     let mut reader: JsonhReader<'_> = JsonhReader::from_str(jsonh, JsonhReaderOptions::new());
     let tokens: Vec<Result<JsonhToken, &str>> = reader.read_element().collect();
 

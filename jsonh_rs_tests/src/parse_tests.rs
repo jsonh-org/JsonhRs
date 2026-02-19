@@ -3,8 +3,8 @@ use jsonh_rs::*;
 #[test]
 pub fn escape_sequence_test() {
     let jsonh: &str = r#"
-        "\U0001F47D and \uD83D\uDC7D"
-        "#;
+"\U0001F47D and \uD83D\uDC7D"
+"#;
     let element: Value = JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap();
 
     assert_eq!(element, "👽 and 👽");
@@ -13,8 +13,8 @@ pub fn escape_sequence_test() {
 #[test]
 pub fn quoteless_escape_sequence_test() {
     let jsonh: &str = r#"
-        \U0001F47D and \uD83D\uDC7D
-        "#;
+\U0001F47D and \uD83D\uDC7D
+"#;
     let element: Value = JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap();
 
     assert_eq!(element, "👽 and 👽");
@@ -23,10 +23,10 @@ pub fn quoteless_escape_sequence_test() {
 #[test]
 pub fn multi_quoted_string_test() {
     let jsonh: &str = r#"
-            """"
-                  Hello! Here's a quote: ". Now a double quote: "". And a triple quote! """. Escape: \\\U0001F47D.
-                 """"
-        "#;
+    """"
+          Hello! Here's a quote: ". Now a double quote: "". And a triple quote! """. Escape: \\\U0001F47D.
+         """"
+"#;
     let element: Value = JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap();
 
     assert_eq!(element, " Hello! Here's a quote: \". Now a double quote: \"\". And a triple quote! \"\"\". Escape: \\👽.");
@@ -35,12 +35,12 @@ pub fn multi_quoted_string_test() {
 #[test]
 pub fn array_test() {
     let jsonh: &str = r#"
-        [
-            1, 2,
-            3
-            4 5,6
-        ]
-        "#;
+[
+    1, 2,
+    3
+    4 5,6
+]
+"#;
     let element: Value = JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap();
 
     assert_eq!(element.as_array().unwrap().len(), 5);
@@ -59,9 +59,9 @@ pub fn number_parser_test() {
 #[test]
 pub fn braceless_object_test() {
     let jsonh: &str = r#"
-        a: b
-        c: d
-        "#;
+a: b
+c: d
+"#;
     let element: Value = JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap();
 
     assert_eq!(element.as_object().unwrap().len(), 2);
@@ -72,12 +72,12 @@ pub fn braceless_object_test() {
 #[test]
 pub fn comment_test() {
     let jsonh: &str = r#"
-        [
-            1 # hash comment
-            2 // line comment
-            3 /* block comment */,4
-        ]
-        "#;
+[
+    1 # hash comment
+    2 // line comment
+    3 /* block comment */,4
+]
+"#;
     let element: Value = JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap();
 
     assert_eq!(element.as_array().unwrap(), &[Value::from(1.0), Value::from(2.0), Value::from(3.0), Value::from(4.0)]);
@@ -86,12 +86,12 @@ pub fn comment_test() {
 #[test]
 pub fn verbatim_string_test() {
     let jsonh: &str = r#"
-        {
-            a\\: b\\
-            @c\\: @d\\
-            @e\\: f\\
-        }
-        "#;
+{
+    a\\: b\\
+    @c\\: @d\\
+    @e\\: f\\
+}
+"#;
     let element: Value = JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap();
 
     assert_eq!(element.as_object().unwrap().len(), 3);
@@ -108,8 +108,8 @@ pub fn verbatim_string_test() {
     assert_eq!(element2.as_object().unwrap()["@e\\"].as_str().unwrap(), "f\\");
 
     let jsonh2: &str = r#"
-        @"a\\": @'''b\\'''
-        "#;
+@"a\\": @'''b\\'''
+"#;
     let element3: Value = JsonhReader::parse_element_from_str(jsonh2, JsonhReaderOptions::new()).unwrap();
 
     assert_eq!(element3.as_object().unwrap().len(), 1);
@@ -119,9 +119,9 @@ pub fn verbatim_string_test() {
 #[test]
 pub fn parse_single_element_test() {
     let jsonh: &str = r#"
-        1
-        2
-        "#;
+1
+2
+"#;
     let element: f64 = JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap().as_f64().unwrap();
 
     assert_eq!(element, 1.0);
@@ -131,10 +131,10 @@ pub fn parse_single_element_test() {
     ).is_err(), true);
 
     let jsonh2: &str = r#"
-        1
+1
 
 
-        "#;
+"#;
 
     assert_eq!(JsonhReader::parse_element_from_str(jsonh2, JsonhReaderOptions::new()
         .with_parse_single_element(true)
@@ -146,12 +146,12 @@ pub fn big_numbers_test() {
     // serde_json::Value does not support 1e99999 (infinity)
 
     let jsonh: &str = r#"
-        [
-            3.5,
-            1e99999,
-            999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999
-        ]
-        "#;
+[
+    3.5,
+    1e99999,
+    999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999
+]
+"#;
 
     // Rust's serde_json::Value does not support infinity
     assert_eq!(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).is_err(), true);
@@ -160,16 +160,16 @@ pub fn big_numbers_test() {
 #[test]
 pub fn max_depth_test() {
     let jsonh: &str = r#"
-        {
-            a: {
-            b: {
-                c: ""
-            }
-            d: {
-            }
-            }
-        }
-        "#;
+{
+    a: {
+    b: {
+        c: ""
+    }
+    d: {
+    }
+    }
+}
+"#;
 
     assert_eq!(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()
         .with_max_depth(2)

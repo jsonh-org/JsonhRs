@@ -3,8 +3,8 @@ use jsonh_rs::*;
 #[test]
 pub fn quoteless_string_starting_with_keyword_test() {
     let jsonh: &str = r#"
-        [nulla, null b, null, @null]
-        "#;
+[nulla, null b, null, @null]
+"#;
     let element: Vec<Option<String>> = serde_json::from_value(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap()).unwrap();
 
     assert_eq!(element, [Some("nulla".to_string()), Some("null b".to_string()), None, Some("null".to_string())]);
@@ -13,8 +13,8 @@ pub fn quoteless_string_starting_with_keyword_test() {
 #[test]
 pub fn braceless_object_with_invalid_value_test() {
     let jsonh: &str = r#"
-        a: {
-        "#;
+a: {
+"#;
 
     assert!(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).is_err());
 }
@@ -22,11 +22,11 @@ pub fn braceless_object_with_invalid_value_test() {
 #[test]
 pub fn nested_braceless_object_test() {
     let jsonh: &str = r#"
-        [
-            a: b
-            c: d
-        ]
-        "#;
+[
+    a: b
+    c: d
+]
+"#;
 
     assert!(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).is_err());
 }
@@ -34,10 +34,10 @@ pub fn nested_braceless_object_test() {
 #[test]
 pub fn quoteless_strings_leading_trailing_whitespace_test() {
     let jsonh: &str = r#"
-        [
-            a b  , 
-        ]
-        "#;
+[
+    a b  , 
+]
+"#;
 
     assert_eq!(
         serde_json::from_value::<Vec<String>>(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap()).unwrap(),
@@ -48,10 +48,10 @@ pub fn quoteless_strings_leading_trailing_whitespace_test() {
 #[test]
 pub fn space_in_quoteless_property_name_test() {
     let jsonh: &str = r#"
-        {
-            a b: c d
-        }
-        "#;
+{
+    a b: c d
+}
+"#;
     let element: Value = JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap();
 
     assert_eq!(element.as_object().unwrap().len(), 1);
@@ -61,10 +61,10 @@ pub fn space_in_quoteless_property_name_test() {
 #[test]
 pub fn quoteless_strings_escape_test() {
     let jsonh: &str = r#"
-        a: \"5
-        b: \\z
-        c: 5 \\
-        "#;
+a: \"5
+b: \\z
+c: 5 \\
+"#;
     let element: Value = JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap();
 
     assert_eq!(element.as_object().unwrap().len(), 3);
@@ -102,8 +102,8 @@ pub fn multi_quoted_strings_no_first_whitespace_newline_test() {
 #[test]
 pub fn quoteless_strings_escaped_leading_trailing_whitespace_test() {
     let jsonh: &str = r#"
-        \nZ\ \r
-        "#;
+\nZ\ \r
+"#;
 
     assert_eq!(
         serde_json::from_value::<String>(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap()).unwrap(),
@@ -114,8 +114,8 @@ pub fn quoteless_strings_escaped_leading_trailing_whitespace_test() {
 #[test]
 pub fn hex_number_with_e_test() {
     let jsonh: &str = r#"
-        0x5e3
-        "#;
+0x5e3
+"#;
 
     assert_eq!(
         serde_json::from_value::<f64>(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap()).unwrap(),
@@ -123,8 +123,8 @@ pub fn hex_number_with_e_test() {
     );
 
     let jsonh2: &str = r#"
-        0x5e+3
-        "#;
+0x5e+3
+"#;
 
     assert_eq!(
         serde_json::from_value::<f64>(JsonhReader::parse_element_from_str(jsonh2, JsonhReaderOptions::new()).unwrap()).unwrap(),
@@ -135,8 +135,8 @@ pub fn hex_number_with_e_test() {
 #[test]
 pub fn number_with_repeated_underscores_test() {
     let jsonh: &str = r#"
-        100__000
-        "#;
+100__000
+"#;
 
     assert_eq!(
         serde_json::from_value::<f64>(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap()).unwrap(),
@@ -147,8 +147,8 @@ pub fn number_with_repeated_underscores_test() {
 #[test]
 pub fn number_with_underscores_after_base_specifier_test() {
     let jsonh: &str = r#"
-        0b_100
-        "#;
+0b_100
+"#;
 
     assert_eq!(
         serde_json::from_value::<f64>(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap()).unwrap(),
@@ -159,8 +159,8 @@ pub fn number_with_underscores_after_base_specifier_test() {
 #[test]
 pub fn negative_number_with_base_specifier_test() {
     let jsonh: &str = r#"
-        -0x5
-        "#;
+-0x5
+"#;
 
     assert_eq!(
         serde_json::from_value::<f64>(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap()).unwrap(),
@@ -171,8 +171,8 @@ pub fn negative_number_with_base_specifier_test() {
 #[test]
 pub fn number_dot_test() {
     let jsonh: &str = r#"
-        .
-        "#;
+.
+"#;
 
     assert!(matches!(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap(), Value::String(_)));
     assert_eq!(
@@ -181,8 +181,8 @@ pub fn number_dot_test() {
     );
 
     let jsonh: &str = r#"
-        -.
-        "#;
+-.
+"#;
 
     assert!(matches!(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap(), Value::String(_)));
     assert_eq!(
@@ -194,12 +194,12 @@ pub fn number_dot_test() {
 #[test]
 pub fn duplicate_property_name_test() {
     let jsonh: &str = r#"
-        {
-          a: 1,
-          c: 2,
-          a: 3,
-        }
-        "#;
+{
+  a: 1,
+  c: 2,
+  a: 3,
+}
+"#;
     let element: Value = JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap();
 
     assert_eq!(element.as_object().unwrap().len(), 2);
@@ -210,8 +210,8 @@ pub fn duplicate_property_name_test() {
 #[test]
 pub fn empty_number_test() {
     let jsonh: &str = r#"
-        0e
-        "#;
+0e
+"#;
 
     assert!(matches!(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap(), Value::String(_)));
     assert_eq!(
@@ -223,8 +223,8 @@ pub fn empty_number_test() {
 #[test]
 pub fn leading_zero_with_exponent_test() {
     let jsonh: &str = r#"
-        [0e4, 0xe, 0xEe+2]
-        "#;
+[0e4, 0xe, 0xEe+2]
+"#;
 
     assert_eq!(
         serde_json::from_value::<Vec<f64>>(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap()).unwrap(),
@@ -232,8 +232,8 @@ pub fn leading_zero_with_exponent_test() {
     );
 
     let jsonh2: &str = r#"
-        [e+2, 0xe+2, 0oe+2, 0be+2]
-        "#;
+[e+2, 0xe+2, 0oe+2, 0be+2]
+"#;
 
     assert_eq!(
         serde_json::from_value::<Vec<String>>(JsonhReader::parse_element_from_str(jsonh2, JsonhReaderOptions::new()).unwrap()).unwrap(),
@@ -241,8 +241,8 @@ pub fn leading_zero_with_exponent_test() {
     );
 
     let jsonh3: &str = r#"
-        [0x0e+, 0b0e+_1]
-        "#;
+[0x0e+, 0b0e+_1]
+"#;
 
     assert_eq!(
         serde_json::from_value::<Vec<String>>(JsonhReader::parse_element_from_str(jsonh3, JsonhReaderOptions::new()).unwrap()).unwrap(),
@@ -253,8 +253,8 @@ pub fn leading_zero_with_exponent_test() {
 #[test]
 pub fn error_in_braceless_property_name_test() {
     let jsonh: &str = r#"
-        a /
-        "#;
+a /
+"#;
 
     assert!(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).is_err());
 }
@@ -262,24 +262,24 @@ pub fn error_in_braceless_property_name_test() {
 #[test]
 pub fn first_property_name_in_braceless_object_test() {
     let jsonh: &str = r#"
-        a: b
-        "#;
+a: b
+"#;
     let element: Value = JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap();
 
     assert_eq!(element.as_object().unwrap().len(), 1);
     assert_eq!(element.as_object().unwrap()["a"], "b");
 
     let jsonh2: &str = r#"
-        0: b
-        "#;
+0: b
+"#;
     let element2: Value = JsonhReader::parse_element_from_str(jsonh2, JsonhReaderOptions::new()).unwrap();
 
     assert_eq!(element2.as_object().unwrap().len(), 1);
     assert_eq!(element2.as_object().unwrap()["0"], "b");
 
     let jsonh3: &str = r#"
-        true: b
-        "#;
+true: b
+"#;
     let element3: Value = JsonhReader::parse_element_from_str(jsonh3, JsonhReaderOptions::new()).unwrap();
 
     assert_eq!(element3.as_object().unwrap().len(), 1);
@@ -289,8 +289,8 @@ pub fn first_property_name_in_braceless_object_test() {
 #[test]
 pub fn fraction_leading_zeroes_test() {
     let jsonh: &str = r#"
-        0.04
-        "#;
+0.04
+"#;
 
     assert_eq!(
         serde_json::from_value::<f64>(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap()).unwrap(),
@@ -301,8 +301,8 @@ pub fn fraction_leading_zeroes_test() {
 #[test]
 pub fn underscore_after_leading_zero_test() {
     let jsonh: &str = r#"
-        0_0
-        "#;
+0_0
+"#;
 
     assert_eq!(
         serde_json::from_value::<f64>(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap()).unwrap(),
@@ -313,8 +313,8 @@ pub fn underscore_after_leading_zero_test() {
 #[test]
 pub fn underscore_beside_dot_test() {
     let jsonh: &str = r#"
-        [0_.0, 0._0]
-        "#;
+[0_.0, 0._0]
+"#;
 
     assert_eq!(
         serde_json::from_value::<Vec<String>>(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap()).unwrap(),
@@ -325,11 +325,11 @@ pub fn underscore_beside_dot_test() {
 #[test]
 pub fn multi_quoted_string_with_non_ascii_indents_test() {
     let jsonh: &str = r#"
-            　
-            """
-            　　 a
-            　　"""
-        "#;
+    　
+    """
+    　　 a
+    　　"""
+"#;
 
     assert_eq!(
         serde_json::from_value::<String>(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap()).unwrap(),
@@ -350,11 +350,11 @@ pub fn join_cr_lf_in_multi_quoted_string_test() {
 #[test]
 pub fn massive_numbers_test() {
     let jsonh: &str = r#"
-        [
-            0x999_999_999_999_999_999_999_999,
-            0x999_999_999_999_999_999_999_999.0,
-        ]
-        "#;
+[
+    0x999_999_999_999_999_999_999_999,
+    0x999_999_999_999_999_999_999_999.0,
+]
+"#;
 
     assert_eq!(
         serde_json::from_value::<Vec<f64>>(JsonhReader::parse_element_from_str(jsonh, JsonhReaderOptions::new()).unwrap()).unwrap(),
