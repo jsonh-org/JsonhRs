@@ -136,7 +136,7 @@ impl<'a> JsonhReader<'a> {
                             return Err(result.unwrap_err());
                         }
                         let Some(number) = Number::from_f64(result.unwrap()) else {
-                            return Err("Failed to convert number to JSON number");
+                            return Err("Infinity and NaN are not supported");
                         };
                         let element: Value = Value::Number(number);
                         if submit_element(current_elements, current_property_name, element.clone()) {
@@ -263,7 +263,7 @@ impl<'a> JsonhReader<'a> {
             }
 
             // Peek char
-            if self.peek().is_none() {
+            if self.peek().is_some() {
                 y.ret(Err("Expected end of elements")).await;
             }
         });

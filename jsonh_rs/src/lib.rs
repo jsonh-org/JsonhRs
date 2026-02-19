@@ -12,3 +12,4 @@ pub use self::jsonh_reader_options::JsonhReaderOptions;
 pub use self::jsonh_version::JsonhVersion;
 pub use self::jsonh_number_parser::JsonhNumberParser;
 pub use serde_json::Value;
+pub use serde_json;
