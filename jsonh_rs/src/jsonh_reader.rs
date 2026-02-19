@@ -811,7 +811,7 @@ impl<'a> JsonhReader<'a> {
                                     if line_leading_whitespace_counter == trailing_whitespace_counter {
                                         // Remove line-leading whitespace
                                         string_builder_chars.drain((index3 + 1 - line_leading_whitespace_counter)..(index3 + 1));
-                                        index3 -= line_leading_whitespace_counter;
+                                        index3 = index3.wrapping_sub(line_leading_whitespace_counter);
                                         // Exit line-leading whitespace
                                         is_line_leading_whitespace = false;
                                     }
@@ -822,13 +822,13 @@ impl<'a> JsonhReader<'a> {
                                 if is_line_leading_whitespace {
                                     // Remove partial line-leading whitespace
                                     string_builder_chars.drain((index3 - line_leading_whitespace_counter)..index3);
-                                    index3 -= line_leading_whitespace_counter;
+                                    index3 = index3.wrapping_sub(line_leading_whitespace_counter);
                                     // Exit line-leading whitespace
                                     is_line_leading_whitespace = false;
                                 }
                             }
 
-                            index3 += 1;
+                            index3 = index3.wrapping_add(1);
                         }
                     }
                 }
