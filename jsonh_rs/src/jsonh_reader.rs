@@ -69,7 +69,7 @@ impl<'a> JsonhReader<'a> {
         return Self::from_string(source, options).parse_element();
     }
 
-    /// Parses a single element from a text reader.
+    /// Parses a single element from the source.
     pub fn parse_element(&mut self) -> Result<Value, &'static str> {
         let mut current_elements: Vec<Value> = Vec::new();
         let mut current_property_name: Option<String> = None;
