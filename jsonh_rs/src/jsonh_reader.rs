@@ -703,8 +703,10 @@ impl<'a> JsonhReader<'a> {
                     string_builder.push(next);
                 }
                 else {
-                    if let Err(escape_sequence_error) = self.read_escape_sequence(None) {
-                        return Err(escape_sequence_error);
+                    match self.read_escape_sequence(None) {
+                        Ok(Some(escape_sequence_char)) => string_builder.push(escape_sequence_char),
+                        Ok(None) => {},
+                        Err(err) => return Err(err),
                     }
                 }
             }
@@ -860,8 +862,10 @@ impl<'a> JsonhReader<'a> {
                     string_builder.push(next);
                 }
                 else {
-                    if let Err(escape_sequence_error) = self.read_escape_sequence(None) {
-                        return Err(escape_sequence_error);
+                    match self.read_escape_sequence(None) {
+                        Ok(Some(escape_sequence_char)) => string_builder.push(escape_sequence_char),
+                        Ok(None) => {},
+                        Err(err) => return Err(err),
                     }
                 }
                 is_named_literal_possible = false;
@@ -1277,7 +1281,7 @@ impl<'a> JsonhReader<'a> {
         // Return aggregated value
         return Ok(value);
     }
-    fn read_escape_sequence(&mut self, high_surrogate: Option<u32>) -> Result<String, &'static str> {
+    fn read_escape_sequence(&mut self, high_surrogate: Option<u32>) -> Result<Option<char>, &'static str> {
         let Some(escape_char) = self.read() else {
             return Err("Expected escape sequence, got end of input");
         };
@@ -1289,43 +1293,43 @@ impl<'a> JsonhReader<'a> {
 
         // Reverse solidus
         if escape_char == '\\' {
-            return Ok("\\".to_string());
+            return Ok(Some('\\'));
         }
         // Backspace
         else if escape_char == 'b' {
-            return Ok("\x08".to_string()); // "\b"
+            return Ok(Some('\x08')); // "\b"
         }
         // Form feed
         else if escape_char == 'f' {
-            return Ok("\x0c".to_string()); // "\f"
+            return Ok(Some('\x0c')); // "\f"
         }
         // Newline
         else if escape_char == 'n' {
-            return Ok("\n".to_string());
+            return Ok(Some('\n'));
         }
         // Carriage return
         else if escape_char == 'r' {
-            return Ok("\r".to_string());
+            return Ok(Some('\r'));
         }
         // Tab
         else if escape_char == 't' {
-            return Ok("\t".to_string());
+            return Ok(Some('\t'));
         }
         // Vertical tab
         else if escape_char == 'v' {
-            return Ok("\x0b".to_string()); // "\v"
+            return Ok(Some('\x0b')); // "\v"
         }
         // Null
         else if escape_char == '0' {
-            return Ok("\0".to_string());
+            return Ok(Some('\0'));
         }
         // Alert
         else if escape_char == 'a' {
-            return Ok("\x07".to_string()); // "\a"
+            return Ok(Some('\x07')); // "\a"
         }
         // Escape
         else if escape_char == 'e' {
-            return Ok("\x1b".to_string()); // "\e"
+            return Ok(Some('\x1b')); // "\e"
         }
         // Unicode hex sequence
         else if escape_char == 'u' {
@@ -1345,14 +1349,14 @@ impl<'a> JsonhReader<'a> {
             if escape_char == '\r' {
                 self.read_one('\n');
             }
-            return Ok(String::new());
+            return Ok(None);
         }
         // Other
         else {
-            return Ok(escape_char.to_string());
+            return Ok(Some(escape_char));
         }
     }
-    fn read_hex_escape_sequence<const LENGTH: usize>(&mut self, high_surrogate: Option<u32>) -> Result<String, &'static str> {
+    fn read_hex_escape_sequence<const LENGTH: usize>(&mut self, high_surrogate: Option<u32>) -> Result<Option<char>, &'static str> {
         let code_point: u32 = match self.read_hex_sequence::<LENGTH>() {
             Ok(code_point) => code_point,
             Err(err) => return Err(err),
@@ -1365,7 +1369,7 @@ impl<'a> JsonhReader<'a> {
                 Err(err) => return Err(err),
             };
             return match char::from_u32(combined) {
-                Some(combined_char) => Ok(combined_char.to_string()),
+                Some(combined_char) => Ok(Some(combined_char)),
                 None => Err("Invalid hex escape sequence"),
             };
         }
@@ -1377,7 +1381,7 @@ impl<'a> JsonhReader<'a> {
             // Standalone character
             else {
                 return match char::from_u32(code_point) {
-                    Some(code_point_char) => Ok(code_point_char.to_string()),
+                    Some(code_point_char) => Ok(Some(code_point_char)),
                     None => Err("Invalid hex escape sequence"),
                 };
             }
