@@ -1,6 +1,6 @@
 <img src="https://github.com/jsonh-org/Jsonh/blob/main/IconUpscaled.png?raw=true" width=180>
 
-<!-- Insert package link -->
+[![crates.io](https://img.shields.io/crates/v/jsonh_rs.svg)](https://crates.io/crates/jsonh_rs)
 
 **JSON for Humans.**
 
