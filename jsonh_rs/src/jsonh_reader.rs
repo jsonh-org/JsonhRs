@@ -209,7 +209,7 @@ impl<'a> JsonhReader<'a> {
     /// }
     /// ```
     pub fn find_property_value(&mut self, property_name: &str) -> bool {
-        let mut current_depth: i32 = 0;
+        let mut current_depth: i64 = 0;
 
         for token_result in self.read_element() {
             // Check error
