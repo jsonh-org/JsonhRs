@@ -1,7 +1,7 @@
 use crate::JsonTokenType;
 
 /// A single JSONH token with a `JsonTokenType`.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct JsonhToken {
     /// The type of the token.
     pub json_type: JsonTokenType,
