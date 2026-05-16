@@ -179,3 +179,74 @@ pub fn max_depth_test() {
         .with_max_depth(3)
     ).is_err(), false);
 }
+
+#[test]
+pub fn parse_json_test() {
+    let jsonh: &str = r#"
+{
+  // Hello /* test */ world
+  a: 'b'
+  "c": '''私'''
+  x: [a,b,c]
+  y: {}
+  z: 0.05e1
+}
+"#;
+
+    let mut reader: JsonhReader<'_> = JsonhReader::from_str(jsonh, JsonhReaderOptions::new());
+    assert_eq!(reader.parse_json(false, None).unwrap(), "{\"a\":\"b\",\"c\":\"私\",\"x\":[\"a\",\"b\",\"c\"],\"y\":{},\"z\":0.5}");
+
+    let mut reader2: JsonhReader<'_> = JsonhReader::from_str(jsonh, JsonhReaderOptions::new());
+    assert_eq!(reader2.parse_json(true, None).unwrap(), "{/* Hello / * test * / world*/\"a\":\"b\",\"c\":\"私\",\"x\":[\"a\",\"b\",\"c\"],\"y\":{},\"z\":0.5}");
+
+    let mut reader3: JsonhReader<'_> = JsonhReader::from_str(jsonh, JsonhReaderOptions::new());
+    assert_eq!(reader3.parse_json(false, Some("  ")).unwrap(), r#"{
+  "a": "b",
+  "c": "私",
+  "x": [
+    "a",
+    "b",
+    "c"
+  ],
+  "y": {},
+  "z": 0.5
+}"#);
+
+    let mut reader4: JsonhReader<'_> = JsonhReader::from_str(jsonh, JsonhReaderOptions::new());
+    assert_eq!(reader4.parse_json(true, Some("  ")).unwrap(), r#"{
+  /* Hello / * test * / world*/
+  "a": "b",
+  "c": "私",
+  "x": [
+    "a",
+    "b",
+    "c"
+  ],
+  "y": {},
+  "z": 0.5
+}"#);
+
+    let jsonh2: &str = r#"
+1
+2
+"#;
+
+    let mut reader5: JsonhReader<'_> = JsonhReader::from_str(jsonh2, JsonhReaderOptions::new()
+        .with_parse_single_element(false)
+    );
+    assert_eq!(reader5.parse_json(false, None).unwrap(), "1");
+
+    let mut reader6: JsonhReader<'_> = JsonhReader::from_str(jsonh2, JsonhReaderOptions::new()
+        .with_parse_single_element(true)
+    );
+    assert!(reader6.parse_json(false, None).is_err());
+
+    let jsonh3: &str = r#"
+a: /*b*/ c
+"#;
+
+    let mut reader7: JsonhReader<'_> = JsonhReader::from_str(jsonh3, JsonhReaderOptions::new()
+        .with_parse_single_element(false)
+    );
+    assert_eq!(reader7.parse_json(false, None).unwrap(), "{\"a\":\"c\"}");
+}

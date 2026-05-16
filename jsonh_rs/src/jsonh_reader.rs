@@ -200,150 +200,168 @@ impl<'a> JsonhReader<'a> {
     /// 
     /// The result is not safe to embed in HTML.
     pub fn parse_json(&mut self, include_comments: bool, indent: Option<&str>) -> Result<String, &'static str> {
-        let mut current_depth: i64 = 0;
-        let mut is_start_of_structure: bool = true;
-        let mut is_property_value: bool = false;
+        let mut parse_next_element_as_json = || -> Result<String, &'static str> {
+            let mut current_depth: i64 = 0;
+            let mut is_start_of_structure: bool = true;
+            let mut is_property_value: bool = false;
 
-        let mut result_builder: String = String::new();
+            let mut result_builder: String = String::new();
 
-        for token_result in self.read_element() {
-            // Check error
-            let token: JsonhToken = token_result?;
+            for token_result in self.read_element() {
+                // Check error
+                let token: JsonhToken = token_result?;
 
-            // Add comments and indents
-            if !is_property_value {
-                // Add comma before property/item
-                if !matches!(token.json_type, JsonTokenType::None | JsonTokenType::Comment) && current_depth > 0 && !is_start_of_structure {
-                    // Don't add trailing comma
-                    if !matches!(token.json_type, JsonTokenType::EndObject | JsonTokenType::EndArray) {
-                        result_builder.push(',');
+                // Add comments and indents
+                if !is_property_value {
+                    // Add comma before property/item
+                    if !matches!(token.json_type, JsonTokenType::None | JsonTokenType::Comment) && current_depth > 0 && !is_start_of_structure {
+                        // Don't add trailing comma
+                        if !matches!(token.json_type, JsonTokenType::EndObject | JsonTokenType::EndArray) {
+                            result_builder.push(',');
+                        }
                     }
-                }
 
-                // Apply indentation
-                if indent.is_some() {
-                    // Don't indent inside empty structures
-                    if !(matches!(token.json_type, JsonTokenType::EndObject | JsonTokenType::EndArray) && is_start_of_structure) {
-                        // Don't indent comment if not included
-                        if !(token.json_type == JsonTokenType::Comment && !include_comments) {
-                            // Don't indent root elements
-                            if current_depth > 0 {
-                                // Add newline before element
-                                result_builder.push('\n');
+                    // Apply indentation
+                    if indent.is_some() {
+                        // Don't indent inside empty structures
+                        if !(matches!(token.json_type, JsonTokenType::EndObject | JsonTokenType::EndArray) && is_start_of_structure) {
+                            // Don't indent comment if not included
+                            if !(token.json_type == JsonTokenType::Comment && !include_comments) {
+                                // Don't indent root elements
+                                if current_depth > 0 {
+                                    // Add newline before element
+                                    result_builder.push('\n');
 
-                                // Get current indent count
-                                let mut indent_count: i64 = current_depth;
-                                if matches!(token.json_type, JsonTokenType::EndObject | JsonTokenType::EndArray) {
-                                    indent_count -= 1;
-                                }
+                                    // Get current indent count
+                                    let mut indent_count: i64 = current_depth;
+                                    if matches!(token.json_type, JsonTokenType::EndObject | JsonTokenType::EndArray) {
+                                        indent_count -= 1;
+                                    }
 
-                                // Add indent
-                                for _counter in 0..indent_count {
-                                    result_builder += indent.unwrap();
+                                    // Add indent
+                                    for _counter in 0..indent_count {
+                                        result_builder += indent.unwrap();
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-            // Track start of structure to avoid adding leading comma
-            if !matches!(token.json_type, JsonTokenType::None | JsonTokenType::Comment) {
-                is_start_of_structure = false;
-            }
-            if matches!(token.json_type, JsonTokenType::StartObject | JsonTokenType::StartArray) {
-                is_start_of_structure = true;
+                // Track start of structure to avoid adding leading comma
+                if !matches!(token.json_type, JsonTokenType::None | JsonTokenType::Comment) {
+                    is_start_of_structure = false;
+                }
+                if matches!(token.json_type, JsonTokenType::StartObject | JsonTokenType::StartArray) {
+                    is_start_of_structure = true;
+                }
+
+                match token.json_type {
+                    // Null
+                    JsonTokenType::Null => {
+                        result_builder += "null";
+                        if current_depth == 0 {
+                            return Ok(result_builder);
+                        }
+                    }
+                    // True
+                    JsonTokenType::True => {
+                        result_builder += "true";
+                        if current_depth == 0 {
+                            return Ok(result_builder);
+                        }
+                    }
+                    // False
+                    JsonTokenType::False => {
+                        result_builder += "false";
+                        if current_depth == 0 {
+                            return Ok(result_builder);
+                        }
+                    }
+                    // String
+                    JsonTokenType::String => {
+                        result_builder += &serde_json::to_string(&token.value).unwrap();
+                        if current_depth == 0 {
+                            return Ok(result_builder);
+                        }
+                    }
+                    // Number
+                    JsonTokenType::Number => {
+                        let result: f64 = JsonhNumberParser::parse(token.value)?;
+                        result_builder += &result.to_string();
+                        if current_depth == 0 {
+                            return Ok(result_builder);
+                        }
+                    }
+                    // Start Object
+                    JsonTokenType::StartObject => {
+                        result_builder.push('{');
+                        current_depth += 1;
+                    }
+                    // Start Array
+                    JsonTokenType::StartArray => {
+                        result_builder.push('[');
+                        current_depth += 1;
+                    }
+                    // End Object
+                    JsonTokenType::EndObject => {
+                        result_builder.push('}');
+                        current_depth -= 1;
+                        if current_depth == 0 {
+                            return Ok(result_builder);
+                        }
+                    }
+                    // End Array
+                    JsonTokenType::EndArray => {
+                        result_builder.push(']');
+                        current_depth -= 1;
+                        if current_depth == 0 {
+                            return Ok(result_builder);
+                        }
+                    }
+                    // Property Name
+                    JsonTokenType::PropertyName => {
+                        result_builder += &serde_json::to_string(&token.value).unwrap();
+                        result_builder.push(':');
+                        if indent.is_some() {
+                            result_builder.push(' ');
+                        }
+                    }
+                    // Comment
+                    JsonTokenType::Comment => {
+                        if include_comments {
+                            result_builder += "/*";
+                            result_builder += &token.value.replace("/*", "/ *").replace("*/", "* /");
+                            result_builder += "*/";
+                        }
+                    }
+                    // Not implemented
+                    _ => {
+                        return Err("Token type not implemented");
+                    }
+                }
+
+                is_property_value = token.json_type == JsonTokenType::PropertyName;
             }
 
-            match token.json_type {
-                // Null
-                JsonTokenType::Null => {
-                    result_builder += "null";
-                    if current_depth == 0 {
-                        return Ok(result_builder);
+            // End of input
+            return Err("Expected token, got end of input");
+        };
+
+        // Parse next element as JSON
+        let next_element_as_json: Result<String, &'static str> = parse_next_element_as_json();
+
+        // Ensure exactly one element
+        if next_element_as_json.is_ok() {
+            if self.options.parse_single_element {
+                for token_result in self.read_end_of_elements() {
+                    if let Err(token_error) = token_result {
+                        return Err(token_error);
                     }
-                }
-                // True
-                JsonTokenType::True => {
-                    result_builder += "true";
-                    if current_depth == 0 {
-                        return Ok(result_builder);
-                    }
-                }
-                // False
-                JsonTokenType::False => {
-                    result_builder += "false";
-                    if current_depth == 0 {
-                        return Ok(result_builder);
-                    }
-                }
-                // String
-                JsonTokenType::String => {
-                    result_builder += &serde_json::to_string(&token.value).unwrap();
-                    if current_depth == 0 {
-                        return Ok(result_builder);
-                    }
-                }
-                // Number
-                JsonTokenType::Number => {
-                    let result: f64 = JsonhNumberParser::parse(token.value)?;
-                    result_builder += &result.to_string();
-                    if current_depth == 0 {
-                        return Ok(result_builder);
-                    }
-                }
-                // Start Object
-                JsonTokenType::StartObject => {
-                    result_builder.push('{');
-                    current_depth += 1;
-                }
-                // Start Array
-                JsonTokenType::StartArray => {
-                    result_builder.push('[');
-                    current_depth += 1;
-                }
-                // End Object
-                JsonTokenType::EndObject => {
-                    result_builder.push('}');
-                    current_depth -= 1;
-                    if current_depth == 0 {
-                        return Ok(result_builder);
-                    }
-                }
-                // End Array
-                JsonTokenType::EndArray => {
-                    result_builder.push(']');
-                    current_depth -= 1;
-                    if current_depth == 0 {
-                        return Ok(result_builder);
-                    }
-                }
-                // Property Name
-                JsonTokenType::PropertyName => {
-                    result_builder += &serde_json::to_string(&token.value).unwrap();
-                    result_builder.push(':');
-                    if indent.is_some() {
-                        result_builder.push(' ');
-                    }
-                }
-                // Comment
-                JsonTokenType::Comment => {
-                    if include_comments {
-                        result_builder += "/*";
-                        result_builder += &token.value.replace("/*", "/ *").replace("*/", "* /");
-                        result_builder += "*/";
-                    }
-                }
-                // Not implemented
-                _ => {
-                    return Err("Token type not implemented");
                 }
             }
-
-            is_property_value = token.json_type == JsonTokenType::PropertyName;
         }
 
-        // End of input
-        return Err("Expected token, got end of input");
+        return next_element_as_json;
     }
     /// Tries to find the given property name in the reader.
     /// 
