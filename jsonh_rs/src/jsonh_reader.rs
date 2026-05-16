@@ -198,7 +198,7 @@ impl<'a> JsonhReader<'a> {
     /// 
     /// If `indent` is not None, the output is pretty-printed with the given indentation.
     /// 
-    /// The result is not safe to embed in HTML.
+    /// Note: The result is **NOT** safe to embed in HTML. To safely embed in HTML, you need to escape characters like `<`, `>` and `&`.
     pub fn parse_json(&mut self, include_comments: bool, indent: Option<&str>) -> Result<String, &'static str> {
         let mut parse_next_element_as_json = || -> Result<String, &'static str> {
             let mut current_depth: i64 = 0;
