@@ -340,7 +340,9 @@ impl<'a> JsonhReader<'a> {
                     }
                 }
 
-                is_property_value = token.json_type == JsonTokenType::PropertyName;
+                if token.json_type != JsonTokenType::Comment {
+                    is_property_value = token.json_type == JsonTokenType::PropertyName;
+                }
             }
 
             // End of input
